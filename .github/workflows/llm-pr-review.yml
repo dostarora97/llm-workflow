@@ -29,7 +29,6 @@ jobs:
           CONFIG_FILE: .github/config.yml # or .github/config.json - YAML preferred for readability
         with:
           script: |
-            const core = require('@actions/core');
             const yaml = require('js-yaml');
             const fs = require('fs');
             const configPath = process.env.CONFIG_FILE;
