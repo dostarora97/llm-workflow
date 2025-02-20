@@ -29,7 +29,6 @@ jobs:
           CONFIG_FILE: .github/config.yml # or .github/config.json - YAML preferred for readability
         with:
           script: |
-            const core = require('@actions/core');
             const yaml = require('js-yaml');
             const fs = require('fs');
             const configPath = process.env.CONFIG_FILE;
@@ -64,32 +63,28 @@ jobs:
               core.setFailed('config-load-error'); # Indicate config load failure
             }
 
-      - name: Set configuration from secrets (fallback)
-        if: steps.load_config.outcome == 'failure'
-        id: set_config_from_secrets
+      - name: Handle missing configuration file
+        if: steps.load_config.outcome == 'failure' && steps.load_config.conclusion == 'failure' && steps.load_config.outputs.config-file-not-found
         run: |
-          echo "::set-output name=analysis_prompt::${{ secrets.ANALYSIS_PROMPT }}"
-          echo "::set-output name=action_prompt::${{ secrets.ACTION_PROMPT }}"
-          echo "::set-output name=llm_model::${{ secrets.LLM_MODEL || 'gpt-3.5-turbo' }}" # Secret for model, default as fallback
-          echo "::set-output name=llm_api_url::${{ secrets.LLM_API_URL || 'https://api.openai.com/v1/chat/completions' }}" # Secret for API URL, default as fallback
-          echo "::set-output name=meta_analysis_system_prompt::${{ secrets.META_ANALYSIS_SYSTEM_PROMPT }}" # Secrets for meta prompts
-          echo "::set-output name=meta_action_system_prompt::${{ secrets.META_ACTION_SYSTEM_PROMPT }}"
+          echo "::error::Configuration file not found. Please ensure .github/config.yml is present in the repository."
+          exit 1
 
-          if [[ -z "${{ secrets.ANALYSIS_PROMPT }}" || -z "${{ secrets.ACTION_PROMPT }}" ]]; then
-            echo "::error::Prompts not found in secrets or config file. Please configure ANALYSIS_PROMPT and ACTION_PROMPT."
-            exit 1 # Exit workflow if prompts are missing
-          fi
+      - name: Handle configuration load error
+        if: steps.load_config.outcome == 'failure' && steps.load_config.conclusion == 'failure' && steps.load_config.outputs.config-load-error
+        run: |
+          echo "::error::Error loading configuration file. Please check the file format and content."
+          exit 1
 
       - name: LLM Analysis
         id: llm_analysis
         uses: actions/github-script@v6
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Security: API key is passed as secret
-          ANALYSIS_PROMPT: ${{ steps.load_config.outputs.analysis_prompt || steps.set_prompts_from_secrets.outputs.analysis_prompt }}
-          LLM_MODEL: ${{ steps.load_config.outputs.llm_model || steps.set_config_from_secrets.outputs.llm_model }}
-          LLM_API_URL: ${{ steps.load_config.outputs.llm_api_url || steps.set_config_from_secrets.outputs.llm_api_url }}
+          ANALYSIS_PROMPT: ${{ steps.load_config.outputs.analysis_prompt }}
+          LLM_MODEL: ${{ steps.load_config.outputs.llm_model }}
+          LLM_API_URL: ${{ steps.load_config.outputs.llm_api_url }}
           DIFF: ${{ steps.get_diff.outputs.diff }}
-          META_ANALYSIS_SYSTEM_PROMPT: ${{ steps.load_config.outputs.meta_analysis_system_prompt || secrets.META_ANALYSIS_SYSTEM_PROMPT }} # Fallback to secret for meta prompt
+          META_ANALYSIS_SYSTEM_PROMPT: ${{ steps.load_config.outputs.meta_analysis_system_prompt }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -100,6 +95,7 @@ jobs:
             const apiKey = process.env.OPENAI_API_KEY;
             const llmModel = process.env.LLM_MODEL;
             const llmApiUrl = process.env.LLM_API_URL;
+            const metaAnalysisSystemPrompt = process.env.META_ANALYSIS_SYSTEM_PROMPT;
 
             if (!apiKey) { # Security: Check for API key existence
               core.setFailed("OPENAI_API_KEY secret is required for LLM API access.");
@@ -150,12 +146,12 @@ jobs:
         uses: actions/github-script@v6
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Security: API key is passed as secret
-          ACTION_PROMPT: ${{ steps.load_config.outputs.action_prompt || steps.set_config_from_secrets.outputs.action_prompt }}
-          LLM_MODEL: ${{ steps.load_config.outputs.llm_model || steps.set_config_from_secrets.outputs.llm_model }}
-          LLM_API_URL: ${{ steps.load_config.outputs.llm_api_url || steps.set_config_from_secrets.outputs.llm_api_url }}
+          ACTION_PROMPT: ${{ steps.load_config.outputs.action_prompt }}
+          LLM_MODEL: ${{ steps.load_config.outputs.llm_model }}
+          LLM_API_URL: ${{ steps.load_config.outputs.llm_api_url }}
           ANALYSIS: ${{ steps.llm_analysis.outputs.analysis }}
           DIFF: ${{ steps.get_diff.outputs.diff }}
-          META_ACTION_SYSTEM_PROMPT: ${{ steps.load_config.outputs.meta_action_system_prompt || secrets.META_ACTION_SYSTEM_PROMPT }} # Fallback to secret for meta prompt
+          META_ACTION_SYSTEM_PROMPT: ${{ steps.load_config.outputs.meta_action_system_prompt }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -167,7 +163,7 @@ jobs:
             const apiKey = process.env.OPENAI_API_KEY;
             const llmModel = process.env.LLM_MODEL;
             const llmApiUrl = process.env.LLM_API_URL;
-
+            const metaActionSystemPrompt = process.env.META_ACTION_SYSTEM_PROMPT;
 
             if (!apiKey) { # Security: Check for API key existence
               core.setFailed("OPENAI_API_KEY secret is required for LLM API access.");
