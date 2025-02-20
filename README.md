@@ -1,4 +1,4 @@
-This is created by DA25 in a weekend
+This is created by DA25.
 
 # llm-workflow
 
