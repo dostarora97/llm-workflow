@@ -9,7 +9,7 @@ jobs:
   review:
     runs-on: ubuntu-latest
     permissions: # Improved: Minimal permissions - only pull_requests: write needed
-      pull_requests: write
+      pull-requests: write
 
     steps:
       - name: Checkout code
